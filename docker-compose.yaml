@@ -1,0 +1,51 @@
+version: "3.8"
+
+services:
+  redis:
+    image: "redis:latest"
+    container_name: "redis"
+    ports:
+      - "6379:6379"
+    command: redis-server --save 20 1 --loglevel warning --requirepass ${REDIS_PASSWORD}
+    environment:
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+    volumes:
+      - ./redis-data:/data
+
+  master:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: python -u /app/master.py --iterations ${ITERATIONS}
+    volumes:
+      - ./master/master.py:/app/master.py
+      - ./utils:/app/utils
+    depends_on:
+      - redis
+    environment:
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    deploy:
+      mode: replicated
+      replicas: ${MASTER_REPLICAS}
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: python -u /app/worker.py
+    volumes:
+      - ./worker/worker.py:/app/worker.py
+      - ./utils:/app/utils
+      - ./results:/results
+    depends_on:
+      - redis
+    environment:
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - RESULT_FOLDER=${RESULT_FOLDER}
+    deploy:
+      mode: replicated
+      replicas: ${WORKER_REPLICAS}
